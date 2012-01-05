@@ -25,15 +25,21 @@ if (typeof Sky === "undefined") Sky = {};
   // call all our callbacks when we get a new socket. they will do the
   // work of setting up handlers and such for specific messages.
   io.sockets.on('connection', function (socket) {
+    console.log("== on connection1 ==");
     _.each(registration_callbacks, function (callback) {
+      console.log("- calling connection callback");
       callback(socket);
+      console.log("back");
     });
 
     // unwrap messages from the client and dispatch them as if they were
     // sent with 'emit'.
     socket.on('message', function (msg) {
+      console.log("== on message ==");
       socket.$emit.apply(socket, msg);
+      console.log("== end on message ==");
     });
+    console.log("== end on connection ==");
   });
 
   ////////// API for other packages //////////
@@ -42,10 +48,14 @@ if (typeof Sky === "undefined") Sky = {};
     // call my callback when a new socket connects.
     // also call it for all current connections.
     register: function (callback) {
+      console.log("== on register1 ==");
       registration_callbacks.push(callback);
       _.each(io.sockets.sockets, function (socket) {
+        console.log("- calling reg callback");
         callback(socket);
+        console.log("back");
       });
+      console.log("== end ond register ==");
     },
 
     // get a list of all sockets

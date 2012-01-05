@@ -18,6 +18,8 @@ if (typeof Sky === "undefined") Sky = {};
 
 (function () {
 
+  var next_myid = 1;
+
   ////////// Constants //////////
 
   // how long to wait until we declare the connection attempt
@@ -62,6 +64,7 @@ if (typeof Sky === "undefined") Sky = {};
   var connection_timer;
 
   var connected = function () {
+    console.log("connected()", socket.myid);
     if (connection_timer) {
       clearTimeout(connection_timer);
       connection_timer = undefined;
@@ -69,6 +72,9 @@ if (typeof Sky === "undefined") Sky = {};
 
     if (status.connected) {
       // already connected. do nothing. this probably shouldn't happen.
+
+      // XXX missed opportunity to find the problem
+      console.log("connect but already connected??");
       return;
     }
 
@@ -87,6 +93,9 @@ if (typeof Sky === "undefined") Sky = {};
     // send the pending message queue. this should always be in
     // order, since the keys are ordered numerically and they are added
     // in order.
+
+    // XXX this is implementation dependent!! and what about the
+    // delete??
     _.each(message_queue, function (msg, id) {
       socket.json.send(msg, function () {
         delete message_queue[id];
@@ -101,6 +110,7 @@ if (typeof Sky === "undefined") Sky = {};
 
   };
   var disconnected = function () {
+    console.log("disconnected()");
     if (connection_timer) {
       clearTimeout(connection_timer);
       connection_timer = undefined;
@@ -108,13 +118,17 @@ if (typeof Sky === "undefined") Sky = {};
     retry_later(); // sets status. no need to do it here.
   };
   var fake_connect_failed = function () {
+    console.log("fake_connect_failed()", socket.myid);
     // sometimes socket.io just doesn't tell us when it failed. we
     // detect this with a timer and force failure.
     socket.removeAllListeners('connect');
     socket.removeAllListeners('disconnect');
     socket.removeAllListeners('connect_failed');
+    console.log("- calling socket.disconnect", socket.myid);
     socket.disconnect();
+    console.log("- calling disconnected");
     disconnected();
+    console.log("- done");
   };
 
   var retry_timeout = function (count) {
@@ -128,6 +142,7 @@ if (typeof Sky === "undefined") Sky = {};
     return timeout;
   };
   var retry_later = function () {
+    console.log("retry_later()");
     var timeout = retry_timeout(status.retry_count)
     retry_timer = setTimeout(retry_now, timeout);
 
@@ -137,24 +152,40 @@ if (typeof Sky === "undefined") Sky = {};
     status_changed();
   };
   var retry_now = function () {
+    console.log("retry_now()");
     status.retry_count += 1;
     status.status = "connecting";
     status.connected = false;
-    delete status.retry_time;
+    delete status.retry_time; // XXX this is really weird
     status_changed();
 
     launch_connection();
   };
 
   var launch_connection = function () {
+    console.log("launch_connection()");
     // XXX if existing socket, any cleanup we have to do?
+    // XXX ^^^ epic fail
 
+    // XXX where is io declared??
     socket = io.connect('/', { reconnect: false,
                                'connect timeout': CONNECT_TIMEOUT,
                                'force new connection': true } );
-    socket.on('connect', connected);
-    socket.on('disconnect', disconnected);
-    socket.on('connect_failed', disconnected);
+    socket.myid = next_myid++;
+    console.log('create', socket.myid);
+    socket.on('connect', function () {
+      console.log("connect", this.myid);
+      connected();
+    });
+
+    socket.on('disconnect', function () {
+      console.log("disconnect", this.myid);
+      disconnected();
+    });
+    socket.on('connect_failed', function () {
+      console.log("connect_failed", this.myid);
+      disconnected();
+    });
 
     _.each(event_callbacks, function (callbacks, name) {
       _.each(callbacks, function (callback) {
@@ -162,6 +193,7 @@ if (typeof Sky === "undefined") Sky = {};
       });
     });
 
+    // XXX should have been a hint
     if (connection_timer) clearTimeout(connection_timer);
     connection_timer = setTimeout(fake_connect_failed,
                                   CONNECT_TIMEOUT + CONNECT_TIMEOUT_SLOP);
@@ -202,6 +234,7 @@ if (typeof Sky === "undefined") Sky = {};
 
   Sky._stream = {
     on: function (name, callback) {
+      // XXX missing semicolons
       if (!event_callbacks[name]) event_callbacks[name] = []
       event_callbacks[name].push(callback);
       if (socket) socket.on(name, callback)

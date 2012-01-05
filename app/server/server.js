@@ -53,6 +53,11 @@ var run = function (bundle_dir) {
 
   // webserver
   var app = connect.createServer();
+  app.use(function (req, res, next) {
+    console.log("req " + req.url);
+//    console.log(JSON.stringify(_.keys(req)));
+    next();
+  });
   app.use(gzip.gzip());
   app.use(connect.static(path.join(bundle_dir, 'static')));
 
