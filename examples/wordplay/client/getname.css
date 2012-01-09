@@ -1,0 +1,14 @@
+#getname .mask {
+    position: fixed;
+    z-index: 10;
+    width: 100%;
+    height: 100%;
+    background: #555555;
+}
+
+#getname .dialog_outer {
+    position: fixed;
+    top: 50%;
+    height: 1px;
+}
+
