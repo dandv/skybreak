@@ -105,18 +105,25 @@
     <div id="scores">
       {{#each players}}
       <div class="player">
-        <div class="header">{{name}} {{score}}</div>
-        {{#each words}}
-        <div id="word_{{this._id}}" class="word {{this.state}}">
-          <span class="score">
-            {{this.score}}
-          </span>
-          {{this.word}}
-        </div>
-        {{/each}}
+        <div class="header">{{name}}</div>
+        {{> words}}
       </div>
       {{/each}}
     </div>
     {{/if}}
+  </div>
+</template>
+
+<template name="words">
+  <div class="words">
+    <div class="score">{{total_score}}</div>
+    {{#each words}}
+    <div id="word_{{_id}}" class="word {{state}}">
+      <span class="score">
+        {{score}}
+      </span>
+      {{word}}
+    </div>
+    {{/each}}
   </div>
 </template>

@@ -137,11 +137,13 @@ Word.api({
 });
 
 if (Sky.is_server) {
+  Sky.publish('players');
   Sky.publish('games');
+
+  // only publish words that the server has scored.
   Sky.publish('words', {
     selector: function (game_id) {
       return {game_id: game_id, state: {$in: ['good','bad']}};
     }
   });
-  Sky.publish('players');
 }

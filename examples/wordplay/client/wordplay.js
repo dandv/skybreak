@@ -258,20 +258,25 @@ Template.scores.players = function () {
   if (!in_game())
     return;
 
-  var players = Player.find({current_game_id: my_game()._id});
-
-  for (var i = 0; i < players.length; i++) {
-    players[i].words = Word.find({game_id: my_game()._id,
-                                  player_id: players[i]._id});
-    players[i].score = 0;
-    for (var j = 0; j < players[i].words.length; j += 1)
-      if (players[i].words[j].score)
-        players[i].score += players[i].words[j].score;
-  }
-
-  return players;
+  return Player.find({current_game_id: my_game()._id});
 };
 
+Template.words.words = function () {
+  return Word.find({game_id: my_game()._id,
+                    player_id: this._id});
+};
+
+Template.words.total_score = function () {
+  var words = Word.find({game_id: my_game()._id,
+                         player_id: this._id});
+
+  var score = 0;
+  for (var i = 0; i < words.length; i++)
+    if (words[i].score)
+      score += words[i].score
+
+  return score;
+};
 
 // at startup, subscribe to all the players and games, and all the
 // words in whatever game i'm currently playing.
