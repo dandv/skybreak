@@ -4,10 +4,10 @@ Game = Sky.Collection('games');
 // }
 
 Word = Sky.Collection('words');
-// {game_id: 123, word: 'hello', valid: true, score: 5}
+// {player_id: 10, game_id: 123, word: 'hello', state: 'good', score: 4}
 
 Player = Sky.Collection('players');
-// {name: 'matt', current_game_id: 123}
+// {name: 'matt', game_id: 123}
 
 // 6 faces per die, 16 dice.  Q really means Qu.
 var DICE = ['PCHOAS', 'OATTOW', 'LRYTTE', 'VTHRWE',
@@ -138,12 +138,20 @@ Word.api({
 
 if (Sky.is_server) {
   Sky.publish('players');
-  Sky.publish('games');
 
-  // only publish words that the server has scored.
-  Sky.publish('words', {
+  // subscribe to single games
+  Sky.publish('games', {
     selector: function (game_id) {
-      return {game_id: game_id, state: {$in: ['good','bad']}};
+      return {_id: game_id};
+    }
+  });
+
+  // publish my words and opponents' words that the server has scored
+  // as good.
+  Sky.publish('words', {
+    selector: function (args) {
+      return {$or: [{game_id: args.game_id, state: 'good'},
+                    {player_id: args.player_id}]};
     }
   });
 }

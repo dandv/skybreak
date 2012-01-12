@@ -65,22 +65,29 @@ var create_my_player = function (name) {
   p = Player.insert({name: name});
   Session.set('player_id', p._id);
 
-  // run a live query on any games i'm involved in, so that we can
+  // run a live query on the game i'm involved in, so that we can
   // drive changes in the session state.  this decouples the reactive
   // templates that depend on game_id and game_state from the frequent
   // DB updates to the game object itself.
-  Game.findLive({players: p._id}, {
-    added: function (game) {
-      Session.set('game_id', game._id);
-      Session.set('game_state', game.state);
-    },
-    changed: function (game) {
-      Session.set('game_id', game._id);
-      Session.set('game_state', game.state);
-    },
-    removed: function (id) {
-      Session.set('game_id', null);
-      Session.set('game_state', null);
+
+  Player.findLive({_id: p._id}, {
+    changed: function (p) {
+      if (!Session.equals('game_id', p.game_id)) {
+        Session.set('game_id', p.game_id);
+
+        if (p.game_id) {
+          // in a new game.  start the clock.
+          Session.set('clock', 120);
+
+          var timer = setInterval(function () {
+            var clock = Session.get('clock');
+            if (clock > 0)
+              Session.set('clock', clock - 1);
+            else
+              clearInterval(timer);
+          }, 1000);
+        }
+      }
     }
   });
 
@@ -108,31 +115,18 @@ var submit_word = function (text) {
 var start_new_game = function (evt) {
   // create a new game w/ fresh board
   var game = Game.insert({board: new_board(),
-                          state: 'in-progress',
-                          clock: 120});
+                          state: 'running'});
 
   // add everyone in the lobby to the game
-  var players = Player.find({current_game_id: null});
-  var player_ids = players.map(function (p) {return p._id});
+  Player.update({game_id: null},
+                {$set: {game_id: game._id}});
 
-  Game.update(game._id, {$set: {players: player_ids}});
+  console.log("put everyone into game", game._id);
 
-  // and remove them from the lobby
-  Player.update({_id: {$in: player_ids}},
-                {$set: {current_game_id: game._id}});
-
-  // drive a 2 minute game timer down to 0.  at the end, kill the
-  // timer and set the game state to complete.
-  var timer = setInterval(function () {
-    Game.update({_id: game._id, clock: {$gt : 0}},
-                {$inc: {clock : -1}});
-
-    var g = Game.find({_id: game._id})[0];
-    if (g.clock === 0) {
-      Game.update(g._id, {$set: {state: 'finished'}});
-      clearInterval(timer);
-    }
-  }, 1000);
+  // as the game leader, i shut it down after 2 minutes.
+  setTimeout(function () {
+    Game.update(game._id, {$set: {state: 'finished'}});
+  }, 120 * 1000);
 };
 
 //////
@@ -163,11 +157,11 @@ Template.lobby.show = function () {
 };
 
 Template.lobby.waiting = function () {
-  return Player.find({current_game_id: null});
+  return Player.find({game_id: null});
 };
 
 Template.lobby.ready_to_play = function () {
-  var players = Player.find({current_game_id: null});
+  var players = Player.find({game_id: null});
 
   return (players.length
           + ' player' + (players.length === 1 ? '' : 's')
@@ -193,8 +187,10 @@ Template.board.square = function (i) {
 };
 
 Template.board.clock = function () {
-  var clock = my_game() && my_game().clock;
-  if (!clock) return;
+  var clock = Session.get('clock');
+
+  if (!clock || clock === 0)
+    return;
 
   // format into M:SS
   var min = Math.floor(clock / 60);
@@ -215,9 +211,10 @@ Template.board.events = {
 //////
 
 Template.scratchpad.show = function () {
-  return Session.equals('game_state', 'in-progress');
+  return my_game() && my_game().state === 'running';
 };
 
+// wish we had a better pattern here.  this comes up all the time.
 Template.scratchpad.events = {
   'click button': function (evt) {
     var textbox = $('#scratchpad input');
@@ -236,13 +233,12 @@ Template.scratchpad.events = {
 };
 
 Template.postgame.show = function () {
-  return Session.equals('game_state', 'finished');
+  return my_game() && my_game().state === 'finished';
 };
 
 Template.postgame.events = {
   'click button': function (evt) {
-    Game.update(my_game()._id, {$pull: {players: my_player()._id}});
-    Player.update(my_player()._id, {$set: {current_game_id: null}});
+    Player.update(my_player()._id, {$set: {game_id: null}});
   }
 }
 
@@ -255,19 +251,16 @@ Template.scores.show = function () {
 };
 
 Template.scores.players = function () {
-  if (!in_game())
-    return;
-
-  return Player.find({current_game_id: my_game()._id});
+  return Player.find({game_id: Session.get('game_id')});
 };
 
 Template.words.words = function () {
-  return Word.find({game_id: my_game()._id,
+  return Word.find({game_id: Session.get('game_id'),
                     player_id: this._id});
 };
 
 Template.words.total_score = function () {
-  var words = Word.find({game_id: my_game()._id,
+  var words = Word.find({game_id: Session.get('game_id'),
                          player_id: this._id});
 
   var score = 0;
@@ -278,15 +271,16 @@ Template.words.total_score = function () {
   return score;
 };
 
-// at startup, subscribe to all the players and games, and all the
-// words in whatever game i'm currently playing.
+// at startup, subscribe to all the players, the game i'm in, and all
+// the words in that game.
 
 Sky.startup(function () {
-  Sky.subscribe('games');
   Sky.subscribe('players');
 
   Sky.autosubscribe(function () {
-    if (in_game())
-      Sky.subscribe('words', my_game()._id);
+    if (Session.get('game_id')) {
+      Sky.subscribe('games', Session.get('game_id'));
+      Sky.subscribe('words', {game_id: Session.get('game_id'), player_id: Session.get('player_id')});
+    }
   });
 });
