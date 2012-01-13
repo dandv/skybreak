@@ -59,11 +59,20 @@
     <div id="login">
       <h1>What's your name?</h1>
       <input type="text" />
+      {{> login_error}}
       <br />
       <button>See who wants to play</button>
     </div>
     {{/if}}
     </div>
+</template>
+
+<template name="login_error">
+  <div>
+    {{#if error}}
+    <div class="error">Please provide a name</div>
+    {{/if}}
+  </div>
 </template>
 
 <template name="lobby">

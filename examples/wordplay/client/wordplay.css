@@ -98,6 +98,10 @@ button:active {
     text-align: center;
 }
 
+#login .error {
+    color: red;
+}
+
 #lobby {
     margin: 100px auto;
     text-align: center;

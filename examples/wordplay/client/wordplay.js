@@ -1,10 +1,35 @@
+// TODOS
+// spinny while word is getting scored
+// strip spaces on input box
+// focus input on game start
+// styling
+// publish remaining words at end of game
+// switch to normal boggle rules?
+// switch to performance branch, eliminate extra divs
+
+// WANTS
+// server-side timeouts and intervals
+// sugar for binding keyup (RET) and click on submit
+// david's render() context helper to avoid needing tiny templates
+
+// SCREENCAST AND TUTORIAL
+// how to break up into stages?
+
+// 1: basic board
+// 2: input words
+// 3: server-side validations
+// 4: lobby + multiplayer
+// 5: spiffies like highlighting word in progress
+
 var my_game = function () {
   return Session.get('game_id') && Game.find(Session.get('game_id'));
 };
 
 var create_my_player = function (name) {
-  if (!name)
+  if (!name) {
+    Session.set('login_error', true);
     return;
+  }
 
   p = Player.insert({name: name});
   Session.set('player_id', p._id);
@@ -106,11 +131,17 @@ Template.login.show = function () {
   return !Session.get('player_id');
 };
 
+Template.login_error.error = function () {
+  return Session.get('login_error');
+};
+
 Template.login.events = {
   'click button': function (evt) {
+    Session.set('login_error', false);
     create_my_player($('#login input').val());
   },
   'keypress input': function (evt) {
+    Session.set('login_error', false);
     if (13 === evt.which)
       create_my_player($('#login input').val());
   }
