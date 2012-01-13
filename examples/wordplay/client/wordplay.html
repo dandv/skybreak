@@ -5,6 +5,7 @@
 <body>
   <div id="main">
     <div id="left">
+      {{> clock }}
       {{> board }}
     </div>
     <div id="right">
@@ -17,36 +18,37 @@
   </div>
 </body>
 
+<template name="clock">
+  <div id="clock">
+    {{ clock }}
+  </div>
+</template>
+
 <template name="board">
-  <div>
-    <div id="clock">
-      {{ clock }}
+  <div id="board">
+    <div>
+      <div class="square {{ selected 0 }}">{{ square 0 }}</div>
+      <div class="square {{ selected 1 }}">{{ square 1 }}</div>
+      <div class="square {{ selected 2 }}">{{ square 2 }}</div>
+      <div class="square {{ selected 3 }}">{{ square 3 }}</div>
     </div>
-    <div id="board">
-      <div>
-        <div class="square" id="s0">{{ square 0 }}</div>
-        <div class="square" id="s1">{{ square 1 }}</div>
-        <div class="square" id="s2">{{ square 2 }}</div>
-        <div class="square" id="s3">{{ square 3 }}</div>
-      </div>
-      <div>
-        <div class="square" id="s4">{{ square 4 }}</div>
-        <div class="square" id="s5">{{ square 5 }}</div>
-        <div class="square" id="s6">{{ square 6 }}</div>
-        <div class="square" id="s7">{{ square 7 }}</div>
-      </div>
-      <div>
-        <div class="square" id="s8">{{ square 8 }}</div>
-        <div class="square" id="s9">{{ square 9 }}</div>
-        <div class="square" id="s10">{{ square 10 }}</div>
-        <div class="square" id="s11">{{ square 11 }}</div>
-      </div>
-      <div>
-        <div class="square" id="s12">{{ square 12 }}</div>
-        <div class="square" id="s13">{{ square 13 }}</div>
-        <div class="square" id="s14">{{ square 14 }}</div>
-        <div class="square" id="s15">{{ square 15 }}</div>
-      </div>
+    <div>
+      <div class="square {{ selected 4 }}">{{ square 4 }}</div>
+      <div class="square {{ selected 5 }}">{{ square 5 }}</div>
+      <div class="square {{ selected 6 }}">{{ square 6 }}</div>
+      <div class="square {{ selected 7 }}">{{ square 7 }}</div>
+    </div>
+    <div>
+      <div class="square {{ selected 8 }}">{{ square 8 }}</div>
+      <div class="square {{ selected 9 }}">{{ square 9 }}</div>
+      <div class="square {{ selected 10 }}">{{ square 10 }}</div>
+      <div class="square {{ selected 11 }}">{{ square 11 }}</div>
+    </div>
+    <div>
+      <div class="square {{ selected 12 }}">{{ square 12 }}</div>
+      <div class="square {{ selected 13 }}">{{ square 13 }}</div>
+      <div class="square {{ selected 14 }}">{{ square 14 }}</div>
+      <div class="square {{ selected 15 }}">{{ square 15 }}</div>
     </div>
   </div>
 </template>

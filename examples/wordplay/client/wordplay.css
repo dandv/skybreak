@@ -85,6 +85,14 @@ button:active {
     font-size: 65px;
 }
 
+.square.last_in_path {
+    color: #ff0000;
+}
+
+.square.in_path {
+    color: #990000;
+}
+
 #login {
     margin: 100px auto;
     text-align: center;

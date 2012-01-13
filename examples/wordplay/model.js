@@ -1,7 +1,5 @@
 Game = Sky.Collection('games');
-// {
-//  board: ['A','I',...],
-// }
+// { board: ['A','I',...] }
 
 Word = Sky.Collection('words');
 // {player_id: 10, game_id: 123, word: 'hello', state: 'good', score: 4}
@@ -57,83 +55,67 @@ var new_board = function () {
   return board;
 }
 
-// return true if word can be formed by hopping vertical, diagonal, or
-// horizontally one space between letters on the given board, without
-// repeating a tile.
-var validate_word_against_board = function (board, word) {
-  // recursive helper function.  word contains the remaining
-  // unprocessed word -- this invocation is concerned with the first
-  // letter of that word.  path is an ordered array of tile ids that
-  // have been used so far by the earlier letters in the word.
-  // adjacents are the available tiles to be used in this round.
-  //
-  // returns true if it finds a complete path at the bottom of the
-  // recursion, and false if this particular path didn't pan out.  any
-  // valid path makes the word valid, and once one is found it won't
-  // bother to search any more.
+// returns an array of valid paths to make the specified word on the
+// board.  each path is an array of board positions 0-15.  a valid
+// path can use each position only once, and each position must be
+// adjacent to the previous position.
+var paths_for_word = function (board, word) {
+  var valid_paths = [];
 
-  var check = function (board, word, path, adjacents) {
-    // bottom of recursion
-    if (word.length === 0)
-      return true;
-
-    // check each adjacent tile for something with the correct letter.
-    // if there's a match, depth-first search it, and if it returns
-    // true, bubble that result all the way to the top.  if none of
-    // the candidate tiles checks out, then this partial path is a
-    // dead end.  return false.
-    for (var i = 0; i < adjacents.length; i += 1) {
-      var tile = adjacents[i];
-      if (board[tile] === word[0] && path.indexOf(tile) === -1)
-        if (check(board,
-                  word.slice(1),       // cdr of word
-                  path.concat([tile]), // append matching location to path
-                  ADJACENCIES[tile]))  // only look surrounding tiles
-          return true;
+  var check_path = function (word, path, positions_to_try) {
+    // base case: the whole word has been consumed.  path is valid.
+    if (word.length === 0) {
+      valid_paths.push(path);
+      return;
     }
 
-    return false;
+    // otherwise, try to match each available position against the
+    // first letter of the word, avoiding any positions that are
+    // already used by the path.  for each of those matches, descend
+    // recursively, passing the remainder of the word, the accumulated
+    // path, and the positions adjacent to the match.
+
+    for (var i = 0; i < positions_to_try.length; i++) {
+      var pos = positions_to_try[i];
+      if (board[pos] === word[0] && path.indexOf(pos) === -1)
+        check_path(word.slice(1),      // cdr of word
+                   path.concat([pos]), // append matching loc to path
+                   ADJACENCIES[pos]);  // only look at surrounding tiles
+    }
   };
 
-  // start off w/ full word, empty path, and all tiles available;
-  return check(board, word, [], [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]);
+  // start recursive search w/ full word, empty path, and all tiles
+  // available for the first letter.
+  check_path(word, [], [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]);
+
+  return valid_paths;
+};
+
+var score_word = function (word) {
+  var game = Game.find(word.game_id);
+  var score;
+
+  // client and server can both check: must be at least three chars
+  // long, not already used, and possible to make on the board.
+  if (word.word.length < 3
+      || Word.find({game_id: word.game_id, word: word.word}).length > 1
+      || paths_for_word(game.board, word.word).length === 0) {
+    Word.update(word._id, {$set: {score: 0, state: 'bad'}});
+    return;
+  }
+
+  // now only on the server, check against dictionary and score it.
+  if (Sky.is_server)
+    if (DICTIONARY.indexOf(word.word.toLowerCase()) === -1) {
+      Word.update(word._id, {$set: {score: 0, state: 'bad'}});
+    } else {
+      var score = Math.pow(2, word.word.length - 3);
+      Word.update(word._id, {$set: {score: score, state: 'good'}});
+    }
 };
 
 Word.api({
-  score: function (word) {
-    var game = Game.find(word.game_id);
-    var score;
-
-    // must be at least three chars long
-    if (word.word.length < 3) {
-      Word.update(word._id, {$set: {score: 0, state: 'bad'}});
-      return;
-    }
-
-    // disallow dups
-    if (Word.find({game_id: word.game_id, word: word.word}).length > 1) {
-      Word.update(word._id, {$set: {score: 0, state: 'bad'}});
-      return;
-    }
-
-    // must be possible given board
-    if (!validate_word_against_board(game.board, word.word)) {
-      Word.update(word._id, {$set: {score: 0, state: 'bad'}});
-      return;
-    }
-
-    // now only on the server, check against dictionary and score it.
-    if (Sky.is_server) {
-      if (DICTIONARY.indexOf(word.word.toLowerCase()) === -1) {
-        Word.update(word._id, {$set: {score: 0, state: 'bad'}});
-        return;
-      }
-
-      var score = Math.pow(2, word.word.length - 3);
-      Word.update(word._id, {$set: {score: score,
-                                    state: 'good'}});
-    }
-  }
+  score: score_word
 });
 
 if (Sky.is_server) {

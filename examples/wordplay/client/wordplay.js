@@ -1,61 +1,5 @@
-// wordplay is a bit different from boggle.  first player to guess
-// each word gets the point, one point per letter, min three letters
-// in a word.  game state is the board, plus an object mapping each
-// possible word to the player that got it, plus a denormalized score,
-// or possibly breaking words out into a separate collection.
-
-// lobby displays list of active players that aren't in a game.  how
-// can i tell that?  players manage their own lobby membership, that's
-// how.  so there's a lobby collection and players add their {name,id}
-// pairs to it, and remove themselves.
-
-// in the lobby, you can invite users to a new game by clicking their
-// names and then clicking "play <n> person game".  this creates a new
-// game, but w/o a board.  if you don't invite anyone, you can just
-// play a solo game.
-
-// clients sub to the list of game documents that they are part of.
-// when anyone creates a game, they add the list of players to the
-// game, and that pops up an "accept invitation" button on the lobby
-// screen.
-
-// if a player accepts an invitation, they remove themselves from the
-// lobby and flag themselves in the game as accepted.  that redraws
-// the screen to the show the accepted game in the foreground.
-
-// 10 seconds after a client initiates a game, it starts the game.
-// pending players are dropped if they haven't yet accepted.  starting
-// them game probably means a raw handler creates the board and
-// initializes everyone's score and wordlist.
-
-// during the game play, each client adds words by entering them in a
-// text box, and either hitting RET or clicking the "add" button.  the
-// client calls a raw handler that adds the word to the wordlist,
-// checks it against the dict, and increments the score.  the local
-// version of the handler skips the dictionary check and score update.
-// down the line, we can replace the raw handler w/ a validation.
-// might want words as a separate collection.
-
-// at the end of the game, client managing the clock sets game state
-// to over.  server won't accept any more words if the game is over.
-// everyone's screen freezes, input goes away, and we show the winner,
-// and a button to go back to the lobby.
-
-// could have server publish all possible words at the end of the
-// round, also.  should probably attach dictionary to board at the
-// start, and show how we can exclude it from the client subscription.
-
-var my_player = function () {
-  return Session.get('player_id') && Player.find(Session.get('player_id'));
-};
-
-var in_game = function () {
-  return !!Session.get('game_id');
-};
-
 var my_game = function () {
-  var game_id = Session.get('game_id');
-  return game_id && Game.find(game_id);
+  return Session.get('game_id') && Game.find(Session.get('game_id'));
 };
 
 var create_my_player = function (name) {
@@ -81,10 +25,12 @@ var create_my_player = function (name) {
 
           var timer = setInterval(function () {
             var clock = Session.get('clock');
-            if (clock > 0)
+            if (clock > 0) {
               Session.set('clock', clock - 1);
-            else
+            } else {
               clearInterval(timer);
+              clear_selected_positions();
+            }
           }, 1000);
         }
       }
@@ -103,8 +49,8 @@ var create_my_player = function (name) {
 };
 
 var submit_word = function (text) {
-  var obj = {player_id: my_player()._id,
-             game_id: my_game()._id,
+  var obj = {player_id: Session.get('player_id'),
+             game_id: Session.get('game_id'),
              word: text.toUpperCase(),
              state: 'pending'};
 
@@ -121,12 +67,35 @@ var start_new_game = function (evt) {
   Player.update({game_id: null},
                 {$set: {game_id: game._id}});
 
-  console.log("put everyone into game", game._id);
-
   // as the game leader, i shut it down after 2 minutes.
   setTimeout(function () {
     Game.update(game._id, {$set: {state: 'finished'}});
   }, 120 * 1000);
+};
+
+var set_selected_positions = function (word) {
+  var paths = paths_for_word(my_game().board, word.toUpperCase());
+  var in_a_path = [];
+  var last_in_a_path = [];
+
+  for (var i = 0; i < paths.length; i++) {
+    in_a_path = in_a_path.concat(paths[i]);
+    last_in_a_path.push(paths[i].slice(-1)[0]);
+  }
+
+  for (var pos = 0; pos < 16; pos++) {
+    if (last_in_a_path.indexOf(pos) !== -1)
+      Session.set('selected_' + pos, 'last_in_path');
+    else if (in_a_path.indexOf(pos) !== -1)
+      Session.set('selected_' + pos, 'in_path');
+    else
+      Session.set('selected_' + pos, false);
+  }
+};
+
+var clear_selected_positions = function () {
+  for (var pos = 0; pos < 16; pos++)
+    Session.set('selected_' + pos, false);
 };
 
 //////
@@ -134,7 +103,7 @@ var start_new_game = function (evt) {
 //////
 
 Template.login.show = function () {
-  return !my_player();
+  return !Session.get('player_id');
 };
 
 Template.login.events = {
@@ -153,7 +122,7 @@ Template.login.events = {
 //////
 
 Template.lobby.show = function () {
-  return my_player() && !in_game();
+  return Session.get('player_id') && !Session.get('game_id');
 };
 
 Template.lobby.waiting = function () {
@@ -186,7 +155,19 @@ Template.board.square = function (i) {
   return game && game.board && game.board[i] || SPLASH[i];
 };
 
-Template.board.clock = function () {
+Template.board.selected = function (i) {
+  return Session.get('selected_' + i);
+};
+
+Template.board.events = {
+  'click .square': function (evt) {
+    var textbox = $('#scratchpad input');
+    textbox.val(textbox.val() + evt.target.innerHTML);
+    textbox.focus();
+  }
+};
+
+Template.clock.clock = function () {
   var clock = Session.get('clock');
 
   if (!clock || clock === 0)
@@ -196,14 +177,6 @@ Template.board.clock = function () {
   var min = Math.floor(clock / 60);
   var sec = clock % 60;
   return min + ':' + (sec < 10 ? ('0' + sec) : sec);
-};
-
-Template.board.events = {
-  'click .square': function (evt) {
-    var textbox = $('#scratchpad input');
-    textbox.val(textbox.val() + evt.target.innerHTML);
-    textbox.focus();
-  }
 };
 
 //////
@@ -221,13 +194,17 @@ Template.scratchpad.events = {
     submit_word(textbox.val());
     textbox.val('');
     textbox.focus();
+    clear_selected_positions();
   },
-  'keypress input': function (evt) {
+  'keyup input': function (evt) {
+    var textbox = $('#scratchpad input');
     if (13 === evt.which) {
-      var textbox = $('#scratchpad input');
       submit_word(textbox.val());
       textbox.val('');
       textbox.focus();
+      clear_selected_positions();
+    } else {
+      set_selected_positions(textbox.val());
     }
   }
 };
@@ -238,7 +215,7 @@ Template.postgame.show = function () {
 
 Template.postgame.events = {
   'click button': function (evt) {
-    Player.update(my_player()._id, {$set: {game_id: null}});
+    Player.update(Session.get('player_id'), {$set: {game_id: null}});
   }
 }
 
@@ -247,7 +224,7 @@ Template.postgame.events = {
 //////
 
 Template.scores.show = function () {
-  return in_game();
+  return !!Session.get('game_id');
 };
 
 Template.scores.players = function () {
